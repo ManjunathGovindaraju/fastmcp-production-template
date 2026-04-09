@@ -6,8 +6,8 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY pyproject.toml uv.lock* ./
-RUN uv sync --frozen --no-dev
+COPY pyproject.toml README.md ./
+RUN uv sync --no-dev
 
 # ─── Runtime stage ───────────────────────────────────────────────────────────
 FROM python:3.13-slim AS runtime
@@ -30,7 +30,7 @@ USER mcpuser
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"
 
 CMD ["python", "-m", "src.server.main"]

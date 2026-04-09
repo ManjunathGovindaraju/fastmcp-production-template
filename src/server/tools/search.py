@@ -2,21 +2,19 @@
 search_records — Generic search tool with filtering, pagination, and observability.
 """
 
+import asyncio
 import logging
 import time
 from typing import Any
 
-from fastmcp import Context
-
 from ..config.security import require_allowlist
-from ..db.connection import DatabasePool
+from ..db.pool import get_pool
 
 logger = logging.getLogger(__name__)
 
 
 @require_allowlist("search_records")
 async def search_records(
-    ctx: Context,
     query: str,
     limit: int = 20,
     offset: int = 0,
@@ -37,16 +35,24 @@ async def search_records(
     start = time.monotonic()
     limit = min(limit, 100)  # enforce max page size
 
-    db: DatabasePool = ctx.server.db_pool
+    # Validate filter column names against an allowlist to prevent SQL injection
+    allowed_filter_cols = {"status", "type", "category"}
+    if filters:
+        invalid = set(filters) - allowed_filter_cols
+        if invalid:
+            raise ValueError(
+                f"Invalid filter column(s): {invalid}. "
+                f"Allowed: {sorted(allowed_filter_cols)}"
+            )
 
     try:
-        # Build parameterized query — never use string interpolation
+        # Build parameterized query — never use string interpolation for values
         where_clauses = ["(name ILIKE $1 OR description ILIKE $1)"]
         params: list[Any] = [f"%{query}%"]
 
         if filters:
             for i, (col, val) in enumerate(filters.items(), start=2):
-                where_clauses.append(f"{col} = ${i}")
+                where_clauses.append(f"{col} = ${i}")  # col is safe: validated above
                 params.append(val)
 
         where_sql = " AND ".join(where_clauses)
@@ -62,6 +68,7 @@ async def search_records(
         count_sql = f"SELECT COUNT(*) FROM records WHERE {where_sql}"
         count_params = params[: len(params) - 2]
 
+        db = get_pool()
         results, total = await asyncio.gather(
             db.fetch(sql, *params),
             db.fetchval(count_sql, *count_params),

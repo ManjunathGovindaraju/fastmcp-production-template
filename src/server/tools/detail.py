@@ -4,16 +4,14 @@ get_record_detail — Fetch a single record by ID with full field expansion.
 
 import logging
 
-from fastmcp import Context
-
 from ..config.security import require_allowlist
-from ..db.connection import DatabasePool
+from ..db.pool import get_pool
 
 logger = logging.getLogger(__name__)
 
 
 @require_allowlist("get_record_detail")
-async def get_record_detail(ctx: Context, record_id: str) -> dict:
+async def get_record_detail(record_id: str) -> dict:
     """
     Fetch complete details for a single record by its unique ID.
 
@@ -23,9 +21,7 @@ async def get_record_detail(ctx: Context, record_id: str) -> dict:
     Returns:
         Full record dictionary, or error if not found
     """
-    db: DatabasePool = ctx.server.db_pool
-
-    row = await db.fetchrow(
+    row = await get_pool().fetchrow(
         """
         SELECT id, name, description, status, metadata, created_at, updated_at
         FROM records
