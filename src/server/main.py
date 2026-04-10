@@ -55,7 +55,10 @@ async def http_health(request: Request) -> JSONResponse:
         pool_status = await pool.health_check()
         return JSONResponse({"status": "ok", "pool": pool_status})
     except RuntimeError:
-        return JSONResponse({"status": "degraded", "detail": "database pool not initialized"}, status_code=503)
+        return JSONResponse(
+            {"status": "degraded", "detail": "database pool not initialized"},
+            status_code=503,
+        )
 
 
 if __name__ == "__main__":
