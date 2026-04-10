@@ -7,6 +7,8 @@
 [![FastMCP](https://img.shields.io/badge/FastMCP-3.x-green.svg)](https://github.com/jlowin/fastmcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> Read the full write-up: [Building a Production-Ready MCP Server: Async PostgreSQL, OpenTelemetry, and Kubernetes in One Template](https://dev.to/manjunathgovindaraju/building-a-production-ready-mcp-server-async-postgresql-opentelemetry-and-kubernetes-in-one-37co)
+
 Most MCP server examples are toy demos — a few tools, no database, no auth, no observability. The moment you try to deploy one in production you hit the same set of problems:
 
 - How do I manage a database connection pool safely across async tool calls?
