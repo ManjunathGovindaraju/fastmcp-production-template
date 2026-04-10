@@ -10,14 +10,33 @@
 
 > Read the full write-up: [Building a Production-Ready MCP Server: Async PostgreSQL, OpenTelemetry, and Kubernetes in One Template](https://dev.to/manjunathgovindaraju/building-a-production-ready-mcp-server-async-postgresql-opentelemetry-and-kubernetes-in-one-37co)
 
-Most MCP server examples are toy demos — a few tools, no database, no auth, no observability. The moment you try to deploy one in production you hit the same set of problems:
+## Why this template exists
+
+Over the past year I built and deployed **20+ MCP servers in production** inside a regulated life sciences environment — powering AI agents that search 57M+ research records, automate scientific workflows, and surface real-time data to LLMs via 150+ registered tools.
+
+Every new server started the same way: copy the FastMCP quickstart, then spend days re-solving the same four problems:
+
+- Async database connections that deadlock under concurrent agent calls
+- No guardrails against prompt injection via unauthorized tool invocation
+- Zero observability — no traces, no metrics, no idea what the LLM was actually calling
+- Kubernetes deployments cobbled together from unrelated examples
+
+After the third server, I extracted the patterns that actually held up in production and built this template. The allowlist security pattern came directly from needing to prevent AI agents from invoking internal debug tools in a HIPAA-adjacent environment. The asyncpg pool configuration comes from real connection exhaustion incidents at 20 concurrent agents. The OpenTelemetry setup is what we use to debug tool call latency today.
+
+This is not a toy demo. Fork it, rename the tools to match your domain, and ship.
+
+---
+
+## The problems it solves
+
+Most MCP server examples stop before the hard parts. The moment you try to deploy one in production you hit the same set of problems:
 
 - How do I manage a database connection pool safely across async tool calls?
 - How do I prevent prompt injection via unauthorized tool invocation?
 - How do I get distributed traces into my existing observability stack?
 - How do I deploy this to Kubernetes with proper secrets management?
 
-This template solves all of that. Fork it, rename it, and ship your MCP server.
+This template solves all of that.
 
 ---
 
