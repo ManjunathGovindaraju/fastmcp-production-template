@@ -3,6 +3,7 @@
 > Production-ready MCP server template with async PostgreSQL, OpenTelemetry, tool-level security allowlisting, Docker, and Kubernetes Helm chart. Zero to deployed in 10 minutes.
 
 [![CI](https://github.com/ManjunathGovindaraju/fastmcp-production-template/actions/workflows/ci.yml/badge.svg)](https://github.com/ManjunathGovindaraju/fastmcp-production-template/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ManjunathGovindaraju/fastmcp-production-template/branch/main/graph/badge.svg)](https://codecov.io/gh/ManjunathGovindaraju/fastmcp-production-template)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/downloads/)
 [![FastMCP](https://img.shields.io/badge/FastMCP-3.x-green.svg)](https://github.com/jlowin/fastmcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -17,6 +18,12 @@ Most MCP server examples are toy demos — a few tools, no database, no auth, no
 - How do I deploy this to Kubernetes with proper secrets management?
 
 This template solves all of that. Fork it, rename it, and ship your MCP server.
+
+---
+
+## Demo
+
+![FastMCP server startup and tool call demo](docs/demo.gif)
 
 ---
 
