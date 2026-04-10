@@ -2,10 +2,11 @@
 Tests for tool-level allowlist security.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from src.server.config.security import is_allowed, load_allowlist, require_allowlist
+import pytest
+
+from src.server.config.security import load_allowlist, require_allowlist
 
 
 def test_load_allowlist_returns_set(tmp_path):

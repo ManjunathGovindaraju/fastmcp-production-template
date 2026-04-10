@@ -4,8 +4,8 @@ Supports min/max pool sizing, health checks, and graceful shutdown.
 """
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import asyncpg
 
@@ -47,7 +47,7 @@ class DatabasePool:
             logger.info("DB pool closed")
 
     @asynccontextmanager
-    async def acquire(self) -> AsyncGenerator[asyncpg.Connection, None]:
+    async def acquire(self) -> AsyncGenerator[asyncpg.Connection]:
         """Acquire a connection from the pool as a context manager."""
         if not self._pool:
             raise RuntimeError("DatabasePool not initialized. Call initialize() first.")

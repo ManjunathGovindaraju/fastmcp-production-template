@@ -15,7 +15,9 @@ class Settings(BaseSettings):
 
     # Server
     service_name: str = "fastmcp-production-template"
-    service_description: str = "Production-grade MCP server with async DB, observability, and security"
+    service_description: str = (
+        "Production-grade MCP server with async DB, observability, and security"
+    )
     port: int = 8000
     log_level: str = "INFO"
 

@@ -3,8 +3,9 @@ Tests for MCP tool functions.
 Uses pytest-asyncio for async test support.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from src.server.tools.health import get_pool_status
 from src.server.tools.stats import get_statistics

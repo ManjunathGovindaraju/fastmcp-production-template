@@ -75,7 +75,10 @@ async def search_records(
         )
 
         duration_ms = (time.monotonic() - start) * 1000
-        logger.info(f"search_records: query='{query}' results={len(results)} total={total} duration={duration_ms:.1f}ms")
+        logger.info(
+            f"search_records: query='{query}' results={len(results)} "
+            f"total={total} duration={duration_ms:.1f}ms"
+        )
 
         return {
             "results": results,

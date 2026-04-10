@@ -21,10 +21,16 @@ jobs:
         uses: astral-sh/setup-uv@v3
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --all-extras
 
       - name: Lint with Ruff
         run: uv run ruff check src/ tests/
+
+      - name: Security scan with Bandit
+        run: uv run bandit -r src/ -lll
+
+      - name: Type check with mypy
+        run: uv run mypy src/ tests/ --ignore-missing-imports
 
       - name: Run tests
         run: uv run pytest tests/ -v --tb=short

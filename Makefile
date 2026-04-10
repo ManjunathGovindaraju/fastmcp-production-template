@@ -4,7 +4,7 @@
 # Uses `uv` for fast Python package management
 
 install:
-	uv sync
+	uv sync --all-extras
 
 dev:
 	uv run python -m src.server.main
@@ -14,6 +14,8 @@ test:
 
 lint:
 	uv run ruff check src/ tests/
+	uv run mypy src/ tests/ --ignore-missing-imports
+	uv run bandit -r src/ -lll
 
 format:
 	uv run ruff format src/ tests/

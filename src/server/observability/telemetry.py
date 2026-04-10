@@ -4,7 +4,6 @@ Provides distributed tracing and metrics for all tool calls.
 """
 
 import logging
-import os
 from dataclasses import dataclass
 
 from opentelemetry import metrics, trace

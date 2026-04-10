@@ -11,7 +11,7 @@ from .config.settings import Settings
 from .db.connection import DatabasePool
 from .db.pool import set_pool
 from .observability.telemetry import setup_telemetry
-from .tools import health, search, detail, stats
+from .tools import detail, health, search, stats
 
 settings = Settings()
 telemetry = setup_telemetry(settings.service_name)
