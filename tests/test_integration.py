@@ -37,6 +37,7 @@ _skip_reason = "DATABASE_URL not set — skipping integration tests"
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.skipif(not DATABASE_URL, reason=_skip_reason),
+    pytest.mark.asyncio(loop_scope="module"),
 ]
 
 
@@ -45,7 +46,7 @@ pytestmark = [
 # ---------------------------------------------------------------------------
 
 
-@pytest_asyncio.fixture(scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def db_pool():
     """
     Creates a real DatabasePool for the entire test module.
@@ -60,7 +61,7 @@ async def db_pool():
     await pool.close()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(loop_scope="module")
 async def seeded_records(db_pool: DatabasePool):
     """
     Inserts three test records before each test and deletes them after.
