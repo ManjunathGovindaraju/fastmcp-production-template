@@ -4,15 +4,16 @@ search_records — Generic search tool with filtering, pagination, and observabi
 
 import asyncio
 import logging
-import time
 from typing import Any
 
 from ..config.security import require_allowlist
 from ..db.pool import get_pool
+from ..observability.instrument import instrument_tool
 
 logger = logging.getLogger(__name__)
 
 
+@instrument_tool("search_records")
 @require_allowlist("search_records")
 async def search_records(
     query: str,
@@ -32,7 +33,6 @@ async def search_records(
     Returns:
         Dictionary with 'results' list and 'total' count
     """
-    start = time.monotonic()
     limit = min(limit, 100)  # enforce max page size
 
     # Validate filter column names against an allowlist to prevent SQL injection
@@ -74,10 +74,8 @@ async def search_records(
             db.fetchval(count_sql, *count_params),
         )
 
-        duration_ms = (time.monotonic() - start) * 1000
         logger.info(
-            f"search_records: query='{query}' results={len(results)} "
-            f"total={total} duration={duration_ms:.1f}ms"
+            "search_records: query=%r results=%d total=%d", query, len(results), total
         )
 
         return {
@@ -89,5 +87,5 @@ async def search_records(
         }
 
     except Exception as e:
-        logger.error(f"search_records failed: {e}")
+        logger.error("search_records failed: %s", e)
         raise

@@ -12,11 +12,18 @@ from .config.security import initialize_allowlist
 from .config.settings import Settings
 from .db.connection import DatabasePool
 from .db.pool import get_pool, set_pool
+from .observability.context import set_telemetry
 from .observability.telemetry import setup_telemetry
 from .tools import detail, health, search, stats
 
 settings = Settings()
-telemetry = setup_telemetry(settings.service_name)
+telemetry = setup_telemetry(
+    settings.service_name,
+    otel_enabled=settings.otel_enabled,
+    otlp_endpoint=settings.otel_exporter_otlp_endpoint,
+)
+set_telemetry(telemetry)  # make available to @instrument_tool decorators
+
 db_pool = DatabasePool(
     dsn=settings.database_url,
     min_size=settings.db_pool_min,

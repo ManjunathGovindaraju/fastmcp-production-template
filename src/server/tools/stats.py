@@ -6,10 +6,12 @@ import logging
 
 from ..config.security import require_allowlist
 from ..db.pool import get_pool
+from ..observability.instrument import instrument_tool
 
 logger = logging.getLogger(__name__)
 
 
+@instrument_tool("get_statistics")
 @require_allowlist("get_statistics")
 async def get_statistics(group_by: str = "status") -> dict:
     """
@@ -38,7 +40,7 @@ async def get_statistics(group_by: str = "status") -> dict:
     )
 
     total = sum(r["count"] for r in rows)
-    logger.info(f"get_statistics: group_by='{group_by}' groups={len(rows)} total={total}")
+    logger.info("get_statistics: group_by=%r groups=%d total=%d", group_by, len(rows), total)
 
     return {
         "group_by": group_by,

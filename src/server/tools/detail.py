@@ -6,10 +6,12 @@ import logging
 
 from ..config.security import require_allowlist
 from ..db.pool import get_pool
+from ..observability.instrument import instrument_tool
 
 logger = logging.getLogger(__name__)
 
 
+@instrument_tool("get_record_detail")
 @require_allowlist("get_record_detail")
 async def get_record_detail(record_id: str) -> dict:
     """
@@ -31,8 +33,8 @@ async def get_record_detail(record_id: str) -> dict:
     )
 
     if not row:
-        logger.warning(f"get_record_detail: record_id='{record_id}' not found")
+        logger.warning("get_record_detail: record_id=%r not found", record_id)
         return {"error": f"Record '{record_id}' not found", "record_id": record_id}
 
-    logger.info(f"get_record_detail: record_id='{record_id}' found")
+    logger.info("get_record_detail: record_id=%r found", record_id)
     return row

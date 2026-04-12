@@ -51,11 +51,12 @@ This template solves all of that.
 | Feature | Implementation |
 |---|---|
 | Async PostgreSQL | `asyncpg` connection pool (min 5, max 20), parameterized queries |
-| OpenTelemetry | Traces + custom metrics (`tool.calls`, `tool.errors`, `tool.duration`, `db.pool_size`) |
+| OpenTelemetry | `@instrument_tool` decorator records traces + 4 metrics (`tool.calls`, `tool.errors`, `tool.duration`, `db.pool_size`) on every tool call |
+| Multi-backend observability | Pre-built collector configs for AWS ADOT → X-Ray, Grafana LGTM stack, and Datadog. One-command local stack: `make observe-up` |
 | Security allowlist | YAML-based tool allowlist prevents unauthorized tool invocation and prompt injection |
 | Docker | Multi-stage build, non-root user (`mcpuser`), health check |
-| Kubernetes | Helm chart, HPA (2–8 replicas), External Secrets Operator, ADOT sidecar |
-| CI/CD | GitHub Actions: Ruff lint → pytest → Docker build |
+| Kubernetes | Helm chart, HPA (2–8 replicas), External Secrets Operator, optional ADOT sidecar |
+| CI/CD | GitHub Actions: Ruff + Bandit + mypy → unit tests → integration tests (postgres service) → Docker build |
 | Configuration | Pydantic Settings, `.env` based, 12-factor compliant |
 
 ---
@@ -73,7 +74,24 @@ docker compose -f docker/docker-compose.yml up
 
 The MCP server starts at `http://localhost:8000/mcp`. PostgreSQL starts with sample data loaded from `docker/init.sql`.
 
-### Option 2: Local Python
+### Option 2: Docker Compose + Full Observability Stack
+
+```bash
+cp .env.example .env
+make observe-up
+```
+
+Starts the MCP server, PostgreSQL, **and** the full Grafana LGTM stack (OpenTelemetry Collector → Tempo → Prometheus → Grafana).
+
+| Endpoint | URL |
+|---|---|
+| MCP server | `http://localhost:8000/mcp` |
+| Grafana dashboards | `http://localhost:3000` (no login) |
+| Prometheus metrics | `http://localhost:9090` |
+
+`OTEL_ENABLED` is automatically set to `true` when using this compose profile. Stop everything with `make observe-down`.
+
+### Option 3: Local Python
 
 ```bash
 git clone https://github.com/ManjunathGovindaraju/fastmcp-production-template.git
@@ -198,18 +216,21 @@ graph LR
 ```mermaid
 flowchart LR
     PR["Pull Request<br/>or push to main"]
-    Lint["Ruff Lint<br/>src/ tests/"]
-    Test["pytest<br/>tests/ -v"]
+    Lint["Ruff + Bandit + mypy<br/>src/ tests/"]
+    Unit["Unit tests<br/>pytest -m 'not integration'"]
+    Int["Integration tests<br/>pytest -m integration<br/>postgres:16 service"]
     Docker["Docker Build<br/>docker/Dockerfile"]
     Done["✅ Ready to deploy"]
 
     PR --> Lint
-    Lint -->|pass| Test
-    Test -->|pass| Docker
+    Lint -->|pass| Unit
+    Unit -->|pass| Int & Docker
+    Int -->|pass| Done
     Docker -->|pass| Done
     Lint -->|fail| X1["❌"]
-    Test -->|fail| X2["❌"]
-    Docker -->|fail| X3["❌"]
+    Unit -->|fail| X2["❌"]
+    Int -->|fail| X3["❌"]
+    Docker -->|fail| X4["❌"]
 ```
 
 ---
@@ -258,37 +279,86 @@ async def search_records(query: str, limit: int = 20) -> dict:
 
 ## Observability
 
-OpenTelemetry traces and metrics export to any OTLP-compatible backend.
+Every tool call is automatically instrumented via the `@instrument_tool` decorator. The decorator is the **outermost** layer — it records all attempts including allowlist-blocked calls.
 
 ```mermaid
 graph LR
-    Server["FastMCP Server"]
+    Call["tools/call"]
+    Inst["@instrument_tool<br/>counter · histogram · span"]
+    AL["@require_allowlist"]
+    Fn["Tool function"]
 
-    subgraph Metrics["Custom Metrics"]
-        M1["mcp.tool.calls<br/>Counter"]
-        M2["mcp.tool.errors<br/>Counter"]
-        M3["mcp.tool.duration<br/>Histogram (ms)"]
-        M4["mcp.db.pool_size<br/>Gauge"]
-    end
-
-    subgraph Backends["OTLP Backends"]
-        B1["Jaeger"]
-        B2["Grafana Tempo"]
-        B3["AWS X-Ray (ADOT)"]
-        B4["Datadog"]
-    end
-
-    Server --> M1 & M2 & M3 & M4
-    M1 & M2 & M3 & M4 -->|"OTLP gRPC/HTTP"| B1 & B2 & B3 & B4
+    Call --> Inst --> AL --> Fn
 ```
 
-Configure in `.env`:
+### Metrics emitted
+
+| Metric | Type | Attributes |
+|---|---|---|
+| `mcp.tool.calls` | Counter | `tool` |
+| `mcp.tool.errors` | Counter | `tool` |
+| `mcp.tool.duration` | Histogram (ms) | `tool` |
+| `mcp.db.pool_size` | Gauge | — |
+
+### How it works
+
+```python
+# Decorator order in every tool file:
+@instrument_tool("search_records")   # outermost — records all attempts
+@require_allowlist("search_records") # inner — may raise PermissionError
+async def search_records(...):
+    ...
+```
+
+The `Telemetry` instance is initialized in `main.py` and stored in `observability/context.py` (a singleton mirroring `db/pool.py`). If `get_telemetry()` returns `None` (e.g., in unit tests), the decorator is a zero-overhead pass-through.
+
+### Backend routing
+
+The app emits standard OTLP and is backend-agnostic. The `collector/` directory provides pre-built configs for three deployment targets:
+
+| File | Routes to |
+|---|---|
+| `collector/adot-aws.yaml` | AWS X-Ray (traces) + CloudWatch EMF (metrics) via ADOT sidecar |
+| `collector/otelcol-grafana.yaml` | Grafana Tempo (traces) + Prometheus (metrics) |
+| `collector/otelcol-datadog.yaml` | Datadog APM + Datadog Metrics |
+
+```mermaid
+graph LR
+    Server["FastMCP Server<br/>OTLP gRPC :4317"]
+
+    subgraph Collector["OTel Collector (ADOT or otelcol-contrib)"]
+        C["collector/*.yaml"]
+    end
+
+    subgraph Backends["Observability Backends"]
+        B1["AWS X-Ray + CloudWatch"]
+        B2["Grafana Tempo + Prometheus"]
+        B3["Datadog APM"]
+    end
+
+    Server -->|"OTLP"| Collector
+    Collector --> B1
+    Collector --> B2
+    Collector --> B3
+```
+
+### Local observability with Grafana LGTM
+
+```bash
+make observe-up   # starts MCP server + postgres + otelcol + Tempo + Prometheus + Grafana
+# Open http://localhost:3000 — traces and metrics appear immediately
+make observe-down
+```
+
+### Configure in `.env`
 
 ```bash
 OTEL_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317   # collector endpoint
 OTEL_SERVICE_NAME=fastmcp-production-template
 ```
+
+Set `OTEL_ENABLED=false` in local dev to write spans to stdout instead.
 
 ---
 
@@ -331,27 +401,41 @@ fastmcp-production-template/
 │   │   ├── connection.py        # asyncpg DatabasePool (fetch/execute helpers)
 │   │   └── pool.py              # Module-level singleton — tools call get_pool()
 │   ├── observability/
-│   │   └── telemetry.py         # OpenTelemetry setup, custom metrics
+│   │   ├── telemetry.py         # OTel setup — OTLP (prod) or console (dev) exporter
+│   │   ├── context.py           # Telemetry singleton — set_telemetry/get_telemetry
+│   │   └── instrument.py        # @instrument_tool decorator (metrics + trace span)
 │   └── tools/
 │       ├── search.py            # search_records — full-text search with pagination
 │       ├── detail.py            # get_record_detail — fetch single record by ID
 │       ├── stats.py             # get_statistics — aggregate counts by field
 │       └── health.py            # get_pool_status — DB pool health (no allowlist)
+├── collector/
+│   ├── adot-aws.yaml            # ADOT collector → AWS X-Ray + CloudWatch
+│   ├── otelcol-grafana.yaml     # otelcol-contrib → Grafana Tempo + Prometheus
+│   └── otelcol-datadog.yaml     # otelcol-contrib → Datadog APM + Metrics
 ├── config/
 │   └── allowlist.yaml           # Tool allowlist (edit to expose/hide tools)
 ├── docker/
 │   ├── Dockerfile               # Multi-stage build (builder + runtime, non-root)
 │   ├── docker-compose.yml       # MCP server + PostgreSQL with health check
-│   └── init.sql                 # Sample schema and seed data
+│   ├── docker-compose.observe.yml  # Adds Grafana LGTM stack (make observe-up)
+│   ├── init.sql                 # Sample schema and seed data
+│   ├── tempo.yaml               # Grafana Tempo config for local stack
+│   ├── prometheus.yml           # Prometheus scrape config for local stack
+│   └── grafana/provisioning/    # Auto-provisioned datasources + dashboards
 ├── k8s/helm/
-│   ├── values.yaml              # Helm values (HPA, ESO, ADOT, probes)
+│   ├── values.yaml              # Helm values (HPA, ESO, optional ADOT sidecar)
 │   └── templates/
 │       └── deployment.yaml      # K8s Deployment with security context
 ├── tests/
+│   ├── conftest.py              # mock_telemetry fixture
 │   ├── test_security.py         # Allowlist enforcement tests
-│   └── test_tools.py            # Tool behavior + SQL injection prevention
+│   ├── test_telemetry.py        # context singleton + @instrument_tool + setup_telemetry
+│   ├── test_tools.py            # Tool behavior + SQL injection prevention (unit, mocked DB)
+│   └── test_integration.py      # Real DB tests — skipped unless DATABASE_URL is set
 ├── .github/workflows/
-│   └── ci.yml                   # Ruff + pytest + Docker build
+│   ├── ci.yml                   # Lint → unit tests → integration tests → Docker build
+│   └── release.yml              # Tag-based release workflow
 ├── pyproject.toml               # uv/hatch project config
 └── .env.example                 # Configuration reference
 ```
@@ -367,8 +451,10 @@ Adding a new tool takes three steps:
 ```python
 from ..config.security import require_allowlist
 from ..db.pool import get_pool
+from ..observability.instrument import instrument_tool
 
-@require_allowlist("your_tool_name")
+@instrument_tool("your_tool_name")   # outermost — records metrics + trace span
+@require_allowlist("your_tool_name") # inner — blocks if not in allowlist
 async def your_tool_name(param: str) -> dict:
     row = await get_pool().fetchrow(
         "SELECT * FROM your_table WHERE id = $1", param
@@ -394,11 +480,35 @@ allowed_tools:
 
 ## Running Tests
 
+### Unit tests (no database required)
+
 ```bash
-uv run pytest tests/ -v
+make test-unit        # default — safe for pre-commit, CI, offline dev
 ```
 
-All 7 tests cover: allowlist loading, blocked tool enforcement, allowed tool passthrough, pool status health check, SQL injection prevention (invalid `group_by`), and valid statistics aggregation.
+28 tests covering: allowlist enforcement, telemetry singleton, `@instrument_tool` decorator (call counting, error counting, duration recording, span wrapping, `functools.wraps`), `setup_telemetry` console and OTLP modes, all four tool functions with mocked DB, and SQL injection prevention.
+
+### Integration tests (requires PostgreSQL)
+
+```bash
+# Start postgres first (uses the same docker-compose as `make observe-up`):
+docker compose -f docker/docker-compose.yml up -d postgres
+
+# Run integration tests:
+DATABASE_URL=postgresql://mcpuser:mcppassword@localhost:5432/mcpdb make test-integration
+```
+
+21 tests covering: real `DatabasePool` lifecycle, `search_records` (pagination, filters, limit capping), `get_record_detail` (found / not-found paths), `get_statistics` (grouping, totals), and SQL injection prevention against a live database.
+
+### All checks (lint + type check + unit tests)
+
+```bash
+make check
+```
+
+### Coverage
+
+Unit tests alone reach **82% coverage** (entry-point files `main.py` and `settings.py` excluded — covered by integration tests). The 75% threshold is enforced in CI on both test phases.
 
 ---
 

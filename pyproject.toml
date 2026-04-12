@@ -55,7 +55,18 @@ packages = ["src/server"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=src --cov-report=xml --cov-report=term-missing"
+addopts = "--cov=src --cov-report=xml --cov-report=term-missing --cov-fail-under=75"
+markers = [
+    "integration: marks tests that require a live PostgreSQL database (deselect with '-m not integration')",
+]
+
+[tool.coverage.run]
+omit = [
+    # Entry point — tested via docker/integration, not unit tests
+    "src/server/main.py",
+    # Pydantic Settings — config loading requires environment, tested via integration
+    "src/server/config/settings.py",
+]
 
 [tool.ruff]
 line-length = 100
